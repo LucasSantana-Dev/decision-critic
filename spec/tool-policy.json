@@ -1,0 +1,45 @@
+{
+  "capability": "decision-critic",
+  "version": "0.1.0",
+  "intent": "Artifact-only adversarial review of a DECISION or analysis. The reviewer must NOT gather evidence; it reasons solely on an inline ARTIFACT + CONTRACT and emits a machine-readable verdict plus a Claims-To-Verify handoff.",
+  "toolAccess": {
+    "mode": "allowlist",
+    "allow": [],
+    "rationale": "An artifact-only critic that can read files, run shells/evals, or call MCP tools can — and historically did — gather evidence, misread it, and assert a fabricated fact as a finding. An empty allow-list makes evidence-gathering, and therefore fabrication, STRUCTURALLY impossible rather than merely discouraged by prose."
+  },
+  "denyCategories": [
+    "filesystem-read",
+    "filesystem-write",
+    "shell-exec",
+    "network",
+    "subagent-spawn",
+    "mcp"
+  ],
+  "enforcement": {
+    "preferredLevel": "L2",
+    "minimumLevel": "L1",
+    "note": "An adapter MUST emit at the highest level its host supports and MUST warn if the host cannot reach minimumLevel. Below L1, the no-tools contract is advice the model can violate, so the structural guarantee is lost.",
+    "levels": {
+      "L0": {
+        "name": "prompt-only",
+        "guarantee": "None enforced. The 'you have no tools' contract lives only in the prompt; if the host grants tools, the model can still call them. Fabrication is discouraged, not prevented.",
+        "useWhen": "The host cannot restrict tools per-agent at all."
+      },
+      "L1": {
+        "name": "denylist",
+        "guarantee": "Named evidence/mutation tools are removed. Blocks the PRIMARY fabrication path (read-a-log, run-an-eval, write-a-file). Residual leak possible for any tool the denylist cannot name (e.g. dynamically-registered MCP tools when the denylist has no wildcard).",
+        "useWhen": "The host supports a per-agent denylist but not an allow-list, or as a belt-and-suspenders fallback beneath L2."
+      },
+      "L2": {
+        "name": "empty-allowlist",
+        "guarantee": "The agent resolves to ZERO tools — core and MCP. Evidence-gathering is structurally impossible. This is the target level.",
+        "useWhen": "The host supports a per-agent allow-list (allow-lists typically exclude inherited MCP tools, which a denylist cannot)."
+      }
+    }
+  },
+  "output": {
+    "schema": "./output.schema.json",
+    "mode": "structured-or-labeled-prose",
+    "note": "Hosts that support structured/tool-forced output should validate against output.schema.json so the orchestrator can machine-read claimsToVerify. Hosts without it fall back to the labeled-prose fields named in prompt.md."
+  }
+}

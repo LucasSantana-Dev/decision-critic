@@ -1,0 +1,18 @@
+{
+  "name": "decision-critic",
+  "version": "0.1.0",
+  "description": "A portable, tool-less adversarial decision reviewer — defined once as a neutral spec, transpiled into any agent host. Makes evidence fabrication structurally impossible instead of merely discouraged.",
+  "license": "MIT",
+  "author": "Lucas Santana",
+  "type": "module",
+  "bin": {
+    "decision-critic-claude-code": "adapters/claude-code.mjs"
+  },
+  "files": ["spec/", "adapters/", "examples/", "README.md", "LICENSE"],
+  "scripts": {
+    "build:claude-code": "node adapters/claude-code.mjs --out examples/claude-code/decision-critic.md",
+    "verify": "node scripts/verify.mjs"
+  },
+  "keywords": ["agent", "subagent", "critic", "decision", "adversarial-review", "llm", "claude-code", "mcp", "tool-policy", "portable"],
+  "repository": { "type": "git", "url": "https://github.com/LucasSantana-Dev/decision-critic.git" }
+}

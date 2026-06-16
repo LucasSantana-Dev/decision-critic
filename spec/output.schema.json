@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LucasSantana-Dev/decision-critic/spec/output.schema.json",
+  "title": "DecisionCriticVerdict",
+  "description": "Structured output of a decision-critic review. Lets any host validate the review and lets the orchestrator machine-read the Claims-To-Verify handoff.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "oneLineAssessment", "strongestObjection", "claimsToVerify"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["REJECT", "NEEDS_REVISION", "SOUND"],
+      "description": "Overall judgement. SOUND => one-line why + stop. NEEDS_REVISION for fixable gaps. REJECT only when a load-bearing assumption is both fragile AND irreversible."
+    },
+    "oneLineAssessment": { "type": "string", "minLength": 1 },
+    "strongestObjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "description": "The single best reason this could be wrong." },
+        "artifactExcerpt": { "type": "string", "description": "The excerpt from the ARTIFACT the objection rests on." }
+      }
+    },
+    "loadBearingAssumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assumption", "rating"],
+        "properties": {
+          "assumption": { "type": "string" },
+          "rating": { "type": "string", "enum": ["VERIFIED_IN_ARTIFACT", "REASONABLE", "FRAGILE"] }
+        }
+      }
+    },
+    "evidenceQualityFindings": { "type": "array", "items": { "type": "string" } },
+    "claimsToVerify": {
+      "type": "array",
+      "description": "Facts the decision rests on that the critic could NOT confirm (it has no tools). The orchestrator MUST verify these before acting on the verdict. A verdict resting on an unverified claim is a hypothesis, not a finding.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim"],
+        "properties": {
+          "claim": { "type": "string", "description": "The unverified factual assertion." },
+          "whyItMatters": { "type": "string", "description": "What in the decision depends on it." },
+          "howToCheck": { "type": "string", "description": "Cheapest way the orchestrator can confirm/refute (e.g. 'grep the source for the symbol', 're-run eval X')." }
+        }
+      }
+    },
+    "premortemScenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenario", "addressed"],
+        "properties": {
+          "scenario": { "type": "string" },
+          "addressed": { "type": "boolean", "description": "Whether the artifact already addresses this failure mode." }
+        }
+      }
+    },
+    "whatWouldFlipTheVerdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence"],
+      "properties": {
+        "evidence": { "type": "string", "description": "The single piece of evidence that would change the verdict." },
+        "cheapToGet": { "type": "boolean" }
+      }
+    },
+    "recommendedOption": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["option", "why"],
+      "properties": {
+        "option": { "type": "string", "description": "An option from the stated decision space only — never invented." },
+        "why": { "type": "string" }
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Low-confidence or author-refutable points, demoted out of the findings."
+    }
+  }
+}
