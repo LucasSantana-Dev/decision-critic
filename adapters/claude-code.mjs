@@ -8,14 +8,23 @@
  * Why an adapter and not a copied prompt: the role, the tool policy, and the
  * output schema live ONCE in ../spec. Each host gets a thin transpiler that
  * (a) renders the host's native packaging and (b) enforces the tool policy at
- * the highest level the host supports. Porting to another agent runtime means
- * writing a sibling of this file — not re-deriving the capability.
+ * the highest level the host supports. Porting to another runtime = writing a
+ * sibling of this file, not re-deriving the capability.
  *
  * Claude Code supports L2 (per-agent allow-list) AND L1 (denylist), so this
- * emits BOTH: `tools: []` is the structural guard (an allow-list excludes
- * inherited MCP tools, which a denylist cannot — Claude Code denylists have no
- * `mcp__*` wildcard); `disallowedTools` is the belt-and-suspenders fallback in
- * case a loader ever treats an empty array as "unset -> inherit all".
+ * emits BOTH:
+ *   - `tools: []`        L2 structural guard. An allow-list excludes inherited
+ *                        tools it never names, including MCP — the ONLY complete
+ *                        boundary. (Documented to exclude MCP; the empty-array
+ *                        edge case could not be runtime-verified at authoring
+ *                        time because the agent registry caches definitions per
+ *                        session — see the generated file's header note.)
+ *   - `disallowedTools`  L1 hedge. If a loader ever treats `[]` as "unset ->
+ *                        inherit all", this still strips the named core
+ *                        evidence/mutation/escape tools. KNOWN-INCOMPLETE: a
+ *                        denylist only removes tools it can NAME, so MCP (no
+ *                        mcp__* wildcard here) and any unenumerated tool leak.
+ *                        L2 is the real guarantee; L1 only caps the blast radius.
  *
  * Usage:
  *   node adapters/claude-code.mjs                 # -> stdout
@@ -30,19 +39,30 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SPEC = join(HERE, '..', 'spec');
 
+// Overridable. Not portable knowledge — a Claude-Code-specific default; pass --model to change.
 const DEFAULT_MODEL = 'claude-opus-4-6';
 
 // Host-specific knowledge lives in the adapter: map neutral deny-categories to
-// this host's concrete tool names. Order is deterministic so output is stable.
+// this host's concrete tool names. Categories with no Claude Code tool are skipped.
+// Order is deterministic so output is stable.
 const CLAUDE_CODE_TOOLS_BY_CATEGORY = {
-  'filesystem-write': ['Write', 'Edit', 'NotebookEdit'],
   'filesystem-read':  ['Read', 'Grep', 'Glob'],
+  'filesystem-write': ['Write', 'Edit', 'NotebookEdit'],
   'shell-exec':       ['Bash'],
   'network':          ['WebFetch', 'WebSearch'],
   'subagent-spawn':   ['Task', 'Agent'],
-  // 'mcp' has NO nameable denylist token in Claude Code (no wildcard). It is
-  // covered ONLY by the L2 empty allow-list. We surface that gap in a comment.
-  'mcp':              ['ToolSearch'], // ToolSearch loads deferred/MCP tool schemas -> deny it by name too
+  // A skill can internally invoke a composite that spawns tool-equipped agents,
+  // re-granting evidence-gathering by the back door — deny it under L1.
+  'skill-invoke':     ['Skill'],
+  // Session/worktree controls are NOT in the "core" set and silently leak under a
+  // bare denylist (observed). The critic needs none of them.
+  'session-control':  ['EnterWorktree', 'ExitWorktree', 'Monitor', 'TaskStop'],
+  // 'mcp' has NO wildcard token in Claude Code denylists: you cannot write
+  // `disallowedTools: mcp__*`. Individual MCP tools CAN be named, but enumerating
+  // them all is impractical and breaks as servers register dynamically. So MCP is
+  // covered ONLY by the L2 empty allow-list. ToolSearch (which LOADS deferred/MCP
+  // tool schemas) is denied to block discovery — best-effort, not a substitute for L2.
+  'mcp':              ['ToolSearch'],
 };
 
 function parseArgs(argv) {
@@ -60,12 +80,17 @@ function loadPromptBody() {
   return raw.replace(/^<!--[\s\S]*?-->\s*/, '').trim() + '\n';
 }
 
+function denyClasses(policy) {
+  // Supports both the v0.2 object form ({_note, classes:[...]}) and a bare array.
+  const dc = policy.denyCategories;
+  return Array.isArray(dc) ? dc : (dc?.classes ?? []);
+}
+
 function resolveDenylist(policy) {
-  const cats = policy.denyCategories ?? [];
   const names = [];
-  for (const cat of cats) {
+  for (const cat of denyClasses(policy)) {
     for (const t of (CLAUDE_CODE_TOOLS_BY_CATEGORY[cat] ?? [])) {
-      if (!names.includes(t)) names.push(t);
+      if (!names.includes(t)) names.push(t); // skip categories with no host tool
     }
   }
   return names;
@@ -94,11 +119,15 @@ function buildAgentFile(model) {
     'level: 3',
     `# GENERATED from decision-critic spec v${policy.version} by adapters/claude-code.mjs — edit the spec, re-transpile.`,
     '# Zero evidence-gathering tools BY CONSTRUCTION (tool-policy.json: empty allow-list, preferredLevel L2).',
-    `#   tools: []            -> L2 structural guard; an empty allow-list resolves to zero tools incl. MCP`,
-    `#                           (Claude Code denylists have NO mcp__* wildcard, so only an allow-list drops MCP).`,
-    `#   disallowedTools: ... -> L1 fallback; if a loader treats [] as unset, core evidence/mutation tools`,
-    `#                           are still stripped, blocking the primary fabrication path (run-eval, read-log).`,
-    '# NOTE: MCP tools have no nameable denylist token here — they are covered ONLY by the L2 empty allow-list.',
+    '#   tools: []            -> L2 structural guard. An empty allow-list resolves to zero tools incl. MCP',
+    '#                           and is the ONLY complete boundary (a denylist cannot name every MCP/plugin',
+    '#                           tool; Claude Code denylists have NO mcp__* wildcard). DOCUMENTED to exclude',
+    '#                           MCP; the empty-array case is runtime-unconfirmed (registry caches agent',
+    '#                           defs per session) -> hence the L1 hedge below. Verify next session: dispatch',
+    '#                           decision-critic and confirm it reports zero tools.',
+    '#   disallowedTools: ... -> L1 hedge. If a loader treats [] as unset, this still strips named core',
+    '#                           evidence/mutation/escape tools (incl. Skill + worktree/session controls that',
+    '#                           otherwise leak). KNOWN-INCOMPLETE: MCP + unenumerated tools still leak at L1.',
     'tools: []',
     `disallowedTools: ${denylist.join(', ')}`,
     '---',

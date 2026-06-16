@@ -2,15 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/LucasSantana-Dev/decision-critic/spec/output.schema.json",
   "title": "DecisionCriticVerdict",
-  "description": "Structured output of a decision-critic review. Lets any host validate the review and lets the orchestrator machine-read the Claims-To-Verify handoff.",
+  "description": "Structured output of a decision-critic review. Lets any host validate the review and lets the orchestrator machine-read the Claims-To-Verify handoff. INVARIANT (advisory, enforce in the orchestrator): if verdictIsConditional is true there MUST be at least one entry in claimsToVerify, and a 'SOUND' verdict that is conditional is NOT a green light until those claims are confirmed.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["verdict", "oneLineAssessment", "strongestObjection", "claimsToVerify"],
+  "required": ["verdict", "verdictIsConditional", "oneLineAssessment", "strongestObjection", "claimsToVerify"],
   "properties": {
     "verdict": {
       "type": "string",
       "enum": ["REJECT", "NEEDS_REVISION", "SOUND"],
       "description": "Overall judgement. SOUND => one-line why + stop. NEEDS_REVISION for fixable gaps. REJECT only when a load-bearing assumption is both fragile AND irreversible."
+    },
+    "verdictIsConditional": {
+      "type": "boolean",
+      "description": "True if the verdict depends on facts the critic could not confirm (claimsToVerify non-empty and blocking). A conditional verdict is a hypothesis until the orchestrator verifies those claims — even when 'verdict' is SOUND."
     },
     "oneLineAssessment": { "type": "string", "minLength": 1 },
     "strongestObjection": {
@@ -45,7 +49,8 @@
         "properties": {
           "claim": { "type": "string", "description": "The unverified factual assertion." },
           "whyItMatters": { "type": "string", "description": "What in the decision depends on it." },
-          "howToCheck": { "type": "string", "description": "Cheapest way the orchestrator can confirm/refute (e.g. 'grep the source for the symbol', 're-run eval X')." }
+          "howToCheck": { "type": "string", "description": "Cheapest way the orchestrator can confirm/refute (e.g. 'grep the source for the symbol', 're-run eval X')." },
+          "blocking": { "type": "boolean", "description": "True if the verdict is not actionable until this is confirmed. Any blocking claim => verdictIsConditional must be true." }
         }
       }
     },

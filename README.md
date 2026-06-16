@@ -1,10 +1,11 @@
 # decision-critic
 
 > A portable, **tool-less adversarial decision reviewer** — defined once as a neutral spec,
-> transpiled into any agent host. It makes evidence fabrication *structurally impossible*
-> instead of merely discouraged by prose.
+> transpiled into any agent host. It makes *external evidence fabrication* structurally
+> impossible instead of merely discouraged by prose.
 
-**Status:** working · single-author personal tooling, published for the *pattern*. The
+**Status:** working · single-author personal tooling, published for the *pattern*. One adapter
+(Claude Code) is built and self-checked; the other hosts below are **untested sketches**. The
 interesting part isn't the prompt — it's the **tool-enforcement model** that stops a reviewer
 agent from inventing the evidence it reviews.
 
@@ -19,10 +20,21 @@ inverting a verdict on something that never happened. Self-gathered, misattribut
 session before the cause was clear.
 
 The fix is not a better prompt. A prompt that says *"do not fabricate"* is advice the model can
-ignore. The fix is **removing the capability**: a reviewer that has no tools *cannot* gather
-evidence, so it cannot misattribute it. It reasons only on the artifact in front of it and
-hands back a **Claims-To-Verify** list for the orchestrator (which has the tools and the
-context) to check.
+ignore. The fix is **removing the capability**: a reviewer that has no tools *cannot gather
+external evidence*, so it cannot run-then-misattribute it. It reasons only on the artifact in
+front of it and hands back a **Claims-To-Verify** list for the orchestrator (which has the tools
+and the context) to check.
+
+### What this does and does not guarantee
+
+- **Prevented (structurally, at L2):** *external* evidence-gathering — running evals, reading
+  logs, grepping the repo, calling MCP tools. With zero tools this is impossible, not just
+  discouraged.
+- **NOT prevented:** *inline hallucination* — the model stating a false fact about the artifact
+  without any tool call. No tool policy can stop that. It is mitigated behaviorally by the
+  prompt's hard constraints (claim vs. inference vs. unsupported; quote-don't-extrapolate) and,
+  crucially, by the **Claims-To-Verify** handoff: the orchestrator re-checks anything the verdict
+  leans on. *A verdict resting on an unverified claim is a hypothesis, not a finding.*
 
 This repo packages that role so it runs on more than one agent runtime.
 
@@ -42,15 +54,20 @@ The portable lesson. "No tools" is only as strong as the host can enforce it:
 
 | Level | Mechanism | Guarantee | Leak |
 |---|---|---|---|
-| **L0** | prompt-only | none — the contract is advice the model may violate | everything, if tools are granted |
-| **L1** | per-agent **denylist** | named evidence/mutation tools removed; blocks the primary fabrication path (run-eval, read-log, write-file) | any tool the denylist can't *name* — e.g. dynamically-registered MCP/plugin tools when there's no wildcard |
-| **L2** | per-agent **empty allow-list** | resolves to **zero** tools, core and MCP; fabrication structurally impossible | none |
+| **L0** | prompt-only | **behavioral only** — no structural enforcement; the model *may* comply but nothing forces it | everything, if the calling context grants tools |
+| **L1** | per-agent **denylist** | named evidence/mutation tools removed; blocks the *primary* fabrication path (run-eval, read-log, write-file) | **known-incomplete by design** — anything the denylist can't *name*: MCP/plugin tools (no wildcard), newly-added tools, or skills that internally spawn tool-equipped agents |
+| **L2** | per-agent **empty allow-list** | resolves to **zero** tools, core and MCP; external evidence-gathering structurally impossible | none — the only *complete* boundary |
 
-> Real-world trap this encodes: Claude Code denylists have **no `mcp__*` wildcard**, so an
-> `disallowedTools` agent silently inherits every MCP tool — including a shell-equivalent. Only
-> an **allow-list** (L2) drops MCP. The Claude Code adapter therefore emits `tools: []` (L2) with
-> a `disallowedTools` hedge (L1) beneath it: structural guard first, belt-and-suspenders fallback
-> in case a loader ever treats an empty array as "unset."
+> **Real-world trap this encodes:** Claude Code denylists have **no `mcp__*` wildcard** — you
+> can name individual MCP tools but not block them as a class — so a `disallowedTools`-only agent
+> silently inherits every MCP tool, including a shell-equivalent. Only an **allow-list** (L2)
+> drops MCP. The Claude Code adapter therefore emits `tools: []` (L2) with a `disallowedTools`
+> hedge (L1) beneath it.
+>
+> **Honesty about L2 on Claude Code:** the docs state an allow-list excludes MCP tools; the
+> specific empty-array case (`tools: []`) was not runtime-confirmable at authoring time because
+> the agent registry caches definitions per session. That is *why* the L1 hedge exists. Confirm
+> in a fresh session: dispatch `decision-critic` and check it reports zero tools.
 
 ## Layout
 
@@ -58,9 +75,9 @@ The portable lesson. "No tools" is only as strong as the host can enforce it:
 spec/
   prompt.md            # host-agnostic system prompt — the single source of truth
   tool-policy.json     # tool access (empty allow-list) + L0/L1/L2 conformance model
-  output.schema.json   # JSON Schema: verdict + machine-readable claimsToVerify[]
+  output.schema.json   # JSON Schema: verdict + verdictIsConditional + machine-readable claimsToVerify[]
 adapters/
-  claude-code.mjs      # reference transpiler -> Claude Code agents/decision-critic.md
+  claude-code.mjs      # reference transpiler -> Claude Code agents/decision-critic.md  (BUILT, verified)
   README.md            # how to port to a new host
 examples/
   claude-code/decision-critic.md   # generated output, checked in
@@ -68,22 +85,39 @@ scripts/
   verify.mjs           # spec well-formedness + adapter determinism/conformance self-check
 ```
 
+## Tested adapters
+
+| Adapter | Host | Status | Max level |
+|---|---|---|---|
+| `claude-code.mjs` | Claude Code subagents | **built + `verify.mjs` PASS** | L2 (+L1 hedge) |
+| _OpenAI / LangChain / MCP_ | — | sketch only, **unbuilt + unverified** (see `adapters/README.md`) | TBD |
+
 ## Use it (Claude Code)
 
 ```bash
 node adapters/claude-code.mjs --out ~/.claude/agents/decision-critic.md
 # then, in Claude Code, route decision/analysis reviews to the `decision-critic` subagent
+npm run verify   # spec + adapter self-check
 ```
 
 Edit the **spec**, never the generated file; re-transpile and `npm run verify`.
 
 ## Reviewer contract (what it returns)
 
-Always: a `VERDICT` (REJECT / NEEDS_REVISION / SOUND), the single strongest objection (with the
-artifact excerpt it rests on), rated load-bearing assumptions, a pre-mortem, the cheapest
+Always: a `verdict` (REJECT / NEEDS_REVISION / SOUND), a `verdictIsConditional` flag (a SOUND
+verdict with open blocking claims is *not* a green light), the single strongest objection (with
+the artifact excerpt it rests on), rated load-bearing assumptions, a pre-mortem, the cheapest
 evidence that would flip the verdict — and, crucially, **`claimsToVerify[]`**: the facts the
 decision rests on that the critic could not confirm. The orchestrator must check those before
-acting. *A verdict resting on an unverified claim is a hypothesis, not a finding.*
+acting.
+
+## Roadmap (not yet built)
+
+- A second adapter (the strongest unbuilt candidate is OpenAI's Responses API — successor to the
+  Assistants API, which is deprecated with a 2026-08-26 shutdown) to *prove* the abstraction
+  generalizes rather than asserting it.
+- `spec/input.schema.json` to formally mark the artifact as untrusted input (currently handled
+  by prompt hardening + a delimiter convention).
 
 ## License
 
