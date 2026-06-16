@@ -6,8 +6,10 @@
 
 **Status:** working · single-author personal tooling, published for the *pattern*. One adapter
 (Claude Code) is built and self-checked; the other hosts below are **untested sketches**. The
-interesting part isn't the prompt — it's the **tool-enforcement model** that stops a reviewer
-agent from inventing the evidence it reviews.
+useful part isn't the prompt — it's applying **default-deny tool access to the *reviewer role***
+so it structurally can't fabricate the evidence it reviews. (The underlying "allow-list is
+complete, deny-list leaks" principle is classic default-deny security — see [Prior art](#prior-art--honest-novelty);
+what's less common is naming it as a reviewer-role contract and making it portable.)
 
 ---
 
@@ -42,8 +44,10 @@ This repo packages that role so it runs on more than one agent runtime.
 
 1. **A neutral spec** (`spec/`) — the role, the tool policy, and the output schema, host-agnostic
    and authored once.
-2. **A tool-enforcement conformance model** (L0 → L1 → L2) — the reusable insight: *how strongly*
-   a given host can guarantee "no tools," and what leaks if it can't.
+2. **A tool-enforcement conformance model** (L0 → L1 → L2) — *not a new idea*; it applies the
+   classic default-deny (allow-list-complete / deny-list-incomplete) principle to per-host agent
+   tooling and names *how strongly* a given host can guarantee "no tools," and what leaks if it
+   can't. The contribution is the explicit, portable articulation, not the underlying security insight.
 3. **A reference adapter** (`adapters/claude-code.mjs`) — a thin transpiler that renders the spec
    into a Claude Code subagent at the strongest level that host supports. Porting to another
    runtime = writing a sibling adapter, not re-deriving the capability.
@@ -111,11 +115,35 @@ evidence that would flip the verdict — and, crucially, **`claimsToVerify[]`**:
 decision rests on that the critic could not confirm. The orchestrator must check those before
 acting.
 
+## Prior art & honest novelty
+
+The mechanism here rests on a **well-established** security principle, not a new one:
+
+- **Default-deny / allow-list completeness** — "enumerate what's safe and allow only that; an
+  unknown capability is denied, not exposed." Classic, and already discussed for agent tooling
+  (e.g. policy-compiler / PCAS work, allow-list-vs-deny-list glossaries). The L0/L1/L2 levels here
+  are a *naming* of that principle's strength per host, not a discovery.
+- **Per-agent tool governance** exists and is well-resourced — e.g. Microsoft's Agent Governance
+  Toolkit does general-purpose *runtime* tool-policy enforcement across languages. This project is
+  **not** competing with that; it does something narrower and at a different layer.
+
+What is **less served**, and is this repo's actual contribution:
+
+1. Treating *"a reviewer/judge agent should be tool-less **by construction**"* as a first-class,
+   reusable role contract — motivated by a concrete failure mode (a tool-equipped critic gathering
+   then misattributing evidence), enforced at agent-*definition* time, not by runtime interception.
+2. A **portable** reference implementation: one neutral spec, thin per-host adapters.
+
+If you only need runtime tool governance, use an established toolkit. Reach for this when you
+specifically want a *portable, structurally tool-less reviewer*.
+
 ## Roadmap (not yet built)
 
-- A second adapter (the strongest unbuilt candidate is OpenAI's Responses API — successor to the
-  Assistants API, which is deprecated with a 2026-08-26 shutdown) to *prove* the abstraction
-  generalizes rather than asserting it.
+- A second adapter to *prove* the abstraction generalizes rather than asserting it. Strongest
+  candidate: **OpenAI's Responses API** (successor to the Assistants API, deprecated, 2026-08-26
+  shutdown) — there tools are *supplied per request*, so attaching none (or `tool_choice: "none"`)
+  yields zero-tool **L2 naturally**, with no inheritance/MCP-leak to hedge against. Verified the
+  API supports `allowed_tools` / `tool_choice`; the empty-tools path is the clean L2 boundary.
 - `spec/input.schema.json` to formally mark the artifact as untrusted input (currently handled
   by prompt hardening + a delimiter convention).
 
