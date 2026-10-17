@@ -1,170 +1,82 @@
 # decision-critic
 
-> A portable, **tool-less adversarial decision reviewer** — defined once as a neutral spec,
-> transpiled into any agent host. It makes *external evidence fabrication* structurally
-> impossible instead of merely discouraged by prose.
+A reviewer agent that has no tools, on purpose. It reads the decision you hand it, argues against it, and returns a list of claims you still need to check. It can't run anything, so it can't invent evidence by running something and misreading the output.
 
-**Status:** working · single-author personal tooling, published for the *pattern*. One adapter
-(Claude Code) is built and self-checked; the other hosts below are **untested sketches**. The
-useful part isn't the prompt — it's applying **default-deny tool access to the *reviewer role***
-so it structurally can't fabricate the evidence it reviews. (The underlying "allow-list is
-complete, deny-list leaks" principle is classic default-deny security — see [Prior art](#prior-art--honest-novelty);
-what's less common is naming it as a reviewer-role contract and making it portable.)
+The role is written once as a neutral spec and transpiled into each agent host. Claude Code is the only adapter built so far.
 
-## Measured, not claimed
+## Measured
 
-`node scripts/probe-claude-code.mjs` starts the Claude Code CLI with three configs and reads the
-tool list the host actually resolves (from the `init` event, killed before any model call, so it
-spends no tokens). One run, Claude Code 2.1.292, a session with 13 MCP servers:
+`npm run probe` starts the Claude Code CLI three ways and reads the tool list the host actually resolves. It stops the CLI before the first model call, so it costs no tokens.
 
-| Config | Tools | MCP tools | Shell-capable |
+One run on Claude Code 2.1.292, in a session with 13 MCP servers:
+
+| Config | Tools | MCP tools | Exec-style tools* |
 |---|---:|---:|---:|
-| baseline (no agent) | 122 | 91 | 3 |
-| **L1** denylist only (17 core tools named) | 108 | 91 | 2 |
-| **L2** `tools: []` (what the adapter generates) | **0** | **0** | **0** |
+| No agent | 122 | 91 | 3 |
+| L1: denylist of 17 core tools | 108 | 91 | 2 |
+| L2: `tools: []` (what the adapter generates) | **0** | **0** | **0** |
 
-The denylist removed every core tool it named and still left 91 MCP tools behind, two of them able
-to run commands. That is the failure this repo exists for. The empty allow-list dropped everything.
-Your numbers will differ with your MCP setup; the L2 row should always be 0, and the script exits 1
-if it isn't.
+\* Matched by name (`bash`, `shell`, `exec`, `process`, `terminal`, `command`).
 
----
+The denylist removed every tool it named and left all 91 MCP tools in place, including one that runs arbitrary shell commands. The empty allow-list removed everything. Your numbers depend on your MCP setup. The L2 row should always be 0, and the script exits 1 if it isn't.
 
-## Why this exists
+## Why
 
-Give a reviewer agent tools and ask it to "verify the claims," and one day it will: run an
-evaluation itself, misread the output, and assert a fabricated fact as a CRITICAL finding —
-inverting a verdict on something that never happened. Self-gathered, misattributed evidence is
-**worse than no evidence**: it carries false authority, and it happened here three times in one
-session before the cause was clear.
+I had a reviewer agent with tools and asked it to verify claims. It ran an eval itself, misread the result, and reported a made-up fact as a critical finding. That flipped the verdict on something that never happened. It did this three times in one session before I found the cause.
 
-The fix is not a better prompt. A prompt that says *"do not fabricate"* is advice the model can
-ignore. The fix is **removing the capability**: a reviewer that has no tools *cannot gather
-external evidence*, so it cannot run-then-misattribute it. It reasons only on the artifact in
-front of it and hands back a **Claims-To-Verify** list for the orchestrator (which has the tools
-and the context) to check.
+Telling the model "do not fabricate" in the prompt didn't fix it. Removing the tools did. A reviewer with no tools reasons only on the artifact and hands back `claimsToVerify[]` for the caller, which has the tools, to check.
 
-### What this does and does not guarantee
+What this does and doesn't cover:
 
-- **Prevented (structurally, at L2):** *external* evidence-gathering — running evals, reading
-  logs, grepping the repo, calling MCP tools. With zero tools this is impossible, not just
-  discouraged.
-- **NOT prevented:** *inline hallucination* — the model stating a false fact about the artifact
-  without any tool call. No tool policy can stop that. It is mitigated behaviorally by the
-  prompt's hard constraints (claim vs. inference vs. unsupported; quote-don't-extrapolate) and,
-  crucially, by the **Claims-To-Verify** handoff: the orchestrator re-checks anything the verdict
-  leans on. *A verdict resting on an unverified claim is a hypothesis, not a finding.*
+- Prevented: gathering outside evidence (running evals, reading logs, grepping, calling MCP tools). With zero tools it can't happen.
+- Not prevented: the model stating something false about the artifact with no tool call at all. The prompt asks it to separate claims from inferences, and the caller should re-check anything the verdict depends on before acting on it.
 
-This repo packages that role so it runs on more than one agent runtime.
+## Enforcement levels
 
-## The three things this ships
+"No tools" is only as strong as the host can enforce it.
 
-1. **A neutral spec** (`spec/`) — the role, the tool policy, and the output schema, host-agnostic
-   and authored once.
-2. **A tool-enforcement conformance model** (L0 → L1 → L2) — *not a new idea*; it applies the
-   classic default-deny (allow-list-complete / deny-list-incomplete) principle to per-host agent
-   tooling and names *how strongly* a given host can guarantee "no tools," and what leaks if it
-   can't. The contribution is the explicit, portable articulation, not the underlying security insight.
-3. **A reference adapter** (`adapters/claude-code.mjs`) — a thin transpiler that renders the spec
-   into a Claude Code subagent at the strongest level that host supports. Porting to another
-   runtime = writing a sibling adapter, not re-deriving the capability.
-
-## Enforcement conformance levels
-
-The portable lesson. "No tools" is only as strong as the host can enforce it:
-
-| Level | Mechanism | Guarantee | Leak |
+| Level | Mechanism | What it guarantees | What leaks |
 |---|---|---|---|
-| **L0** | prompt-only | **behavioral only** — no structural enforcement; the model *may* comply but nothing forces it | everything, if the calling context grants tools |
-| **L1** | per-agent **denylist** | named evidence/mutation tools removed; blocks the *primary* fabrication path (run-eval, read-log, write-file) | **known-incomplete by design** — anything the denylist can't *name*: MCP/plugin tools (no wildcard), newly-added tools, or skills that internally spawn tool-equipped agents |
-| **L2** | per-agent **empty allow-list** | resolves to **zero** tools, core and MCP; external evidence-gathering structurally impossible | none — the only *complete* boundary |
+| L0 | Prompt only | Nothing structural | Everything the caller grants |
+| L1 | Per-agent denylist | Named tools are gone | Anything you can't name: MCP tools (no `mcp__*` wildcard), new tools, plugins |
+| L2 | Per-agent empty allow-list | Zero tools, core and MCP | Nothing |
 
-> **Real-world trap this encodes:** Claude Code denylists have **no `mcp__*` wildcard** — you
-> can name individual MCP tools but not block them as a class — so a `disallowedTools`-only agent
-> silently inherits every MCP tool, including a shell-equivalent. Only an **allow-list** (L2)
-> drops MCP. The Claude Code adapter therefore emits `tools: []` (L2) with a `disallowedTools`
-> hedge (L1) beneath it.
->
-> **L2 on Claude Code, confirmed:** the docs state an allow-list excludes MCP tools but don't show
-> the empty-array case. `scripts/probe-claude-code.mjs` confirms `tools: []` resolves to zero tools
-> at runtime (table above). The L1 hedge stays in the generated file for any loader or future
-> version that treats an empty array as unset.
+The Claude Code adapter emits `tools: []` (L2) and keeps a `disallowedTools` list (L1) underneath, in case some loader or future version treats an empty array as unset.
+
+## Use it
+
+```bash
+node adapters/claude-code.mjs --out ~/.claude/agents/decision-critic.md
+npm run verify   # static check of the spec and the generated file
+npm run probe    # runtime check against your installed claude CLI
+```
+
+Edit `spec/`, never the generated file. Re-run the adapter and `npm run verify` after any change.
+
+## What it returns
+
+A `verdict` (REJECT, NEEDS_REVISION or SOUND), a `verdictIsConditional` flag, the strongest objection with the excerpt it rests on, rated assumptions, a pre-mortem, the cheapest evidence that would flip the verdict, and `claimsToVerify[]`. When `verdictIsConditional` is true, the verdict depends on open claims, so check those first. Schema: `spec/output.schema.json`.
 
 ## Layout
 
 ```
-spec/
-  prompt.md            # host-agnostic system prompt — the single source of truth
-  tool-policy.json     # tool access (empty allow-list) + L0/L1/L2 conformance model
-  output.schema.json   # JSON Schema: verdict + verdictIsConditional + machine-readable claimsToVerify[]
-adapters/
-  claude-code.mjs      # reference transpiler -> Claude Code agents/decision-critic.md  (BUILT, verified)
-  README.md            # how to port to a new host
-examples/
-  claude-code/decision-critic.md   # generated output, checked in
-scripts/
-  verify.mjs           # spec well-formedness + adapter determinism/conformance self-check
-  probe-claude-code.mjs # runtime check: tools Claude Code actually resolves (baseline / L1 / L2)
+spec/prompt.md                 host-agnostic system prompt (source of truth)
+spec/tool-policy.json          empty allow-list + L0/L1/L2 model
+spec/output.schema.json        output contract
+adapters/claude-code.mjs       spec -> Claude Code subagent
+adapters/README.md             how to port to another host
+scripts/verify.mjs             static self-check
+scripts/probe-claude-code.mjs  runtime tool check
 ```
 
-## Tested adapters
+## Prior art
 
-| Adapter | Host | Status | Max level |
-|---|---|---|---|
-| `claude-code.mjs` | Claude Code subagents | **built, `verify.mjs` PASS, L2 runtime-confirmed by `probe-claude-code.mjs`** | L2 (+L1 hedge) |
-| _OpenAI / LangChain / MCP_ | — | sketch only, **unbuilt + unverified** (see `adapters/README.md`) | TBD |
+Default-deny (allow-lists are complete, denylists leak) is an old security principle, and general tool-governance toolkits already exist, such as Microsoft's Agent Governance Toolkit. If you need runtime policy across many agents, use one of those. This repo is narrower: it treats "the reviewer has no tools" as a role contract set when the agent is defined, and keeps it portable across hosts.
 
-## Use it (Claude Code)
+## Next
 
-```bash
-node adapters/claude-code.mjs --out ~/.claude/agents/decision-critic.md
-# then, in Claude Code, route decision/analysis reviews to the `decision-critic` subagent
-npm run verify   # spec + adapter self-check
-npm run probe    # runtime check against your installed claude CLI (no tokens spent)
-```
-
-Edit the **spec**, never the generated file; re-transpile and `npm run verify`.
-
-## Reviewer contract (what it returns)
-
-Always: a `verdict` (REJECT / NEEDS_REVISION / SOUND), a `verdictIsConditional` flag (a SOUND
-verdict with open blocking claims is *not* a green light), the single strongest objection (with
-the artifact excerpt it rests on), rated load-bearing assumptions, a pre-mortem, the cheapest
-evidence that would flip the verdict — and, crucially, **`claimsToVerify[]`**: the facts the
-decision rests on that the critic could not confirm. The orchestrator must check those before
-acting.
-
-## Prior art & honest novelty
-
-The mechanism here rests on a **well-established** security principle, not a new one:
-
-- **Default-deny / allow-list completeness** — "enumerate what's safe and allow only that; an
-  unknown capability is denied, not exposed." Classic, and already discussed for agent tooling
-  (e.g. policy-compiler / PCAS work, allow-list-vs-deny-list glossaries). The L0/L1/L2 levels here
-  are a *naming* of that principle's strength per host, not a discovery.
-- **Per-agent tool governance** exists and is well-resourced — e.g. Microsoft's Agent Governance
-  Toolkit does general-purpose *runtime* tool-policy enforcement across languages. This project is
-  **not** competing with that; it does something narrower and at a different layer.
-
-What is **less served**, and is this repo's actual contribution:
-
-1. Treating *"a reviewer/judge agent should be tool-less **by construction**"* as a first-class,
-   reusable role contract — motivated by a concrete failure mode (a tool-equipped critic gathering
-   then misattributing evidence), enforced at agent-*definition* time, not by runtime interception.
-2. A **portable** reference implementation: one neutral spec, thin per-host adapters.
-
-If you only need runtime tool governance, use an established toolkit. Reach for this when you
-specifically want a *portable, structurally tool-less reviewer*.
-
-## Roadmap (not yet built)
-
-- A second adapter to *prove* the abstraction generalizes rather than asserting it. Strongest
-  candidate: **OpenAI's Responses API** (successor to the Assistants API, deprecated, 2026-08-26
-  shutdown) — there tools are *supplied per request*, so attaching none (or `tool_choice: "none"`)
-  yields zero-tool **L2 naturally**, with no inheritance/MCP-leak to hedge against. Verified the
-  API supports `allowed_tools` / `tool_choice`; the empty-tools path is the clean L2 boundary.
-- `spec/input.schema.json` to formally mark the artifact as untrusted input (currently handled
-  by prompt hardening + a delimiter convention).
+- A second adapter to show the spec generalizes. OpenAI's Responses API is the likely one, since tools are passed per request and sending none gives L2 directly.
+- `spec/input.schema.json` to mark the artifact as untrusted input.
 
 ## License
 
