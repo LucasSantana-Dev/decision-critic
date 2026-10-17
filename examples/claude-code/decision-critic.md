@@ -1,16 +1,14 @@
 ---
 name: decision-critic
-description: Artifact-only adversarial reviewer for DECISIONS and analysis (Opus). Reasons solely on the provided ARTIFACT + CONTRACT — has NO evidence-gathering tools by construction, so it cannot fabricate facts from logs/evals it ran itself. Use for research-and-decide Phase 2; use `critic` for code/plan reviews that need to verify the codebase.
-model: claude-opus-4-6
-level: 3
+description: Artifact-only adversarial reviewer for DECISIONS and analysis. Reasons solely on the provided ARTIFACT + CONTRACT — has NO evidence-gathering tools by construction, so it cannot fabricate facts from logs/evals it ran itself. Use before committing a decision; use a tool-equipped reviewer for code reviews that need to verify the codebase.
+model: opus
 # GENERATED from decision-critic spec v0.2.0 by adapters/claude-code.mjs — edit the spec, re-transpile.
 # Zero evidence-gathering tools BY CONSTRUCTION (tool-policy.json: empty allow-list, preferredLevel L2).
 #   tools: []            -> L2 structural guard. An empty allow-list resolves to zero tools incl. MCP
 #                           and is the ONLY complete boundary (a denylist cannot name every MCP/plugin
 #                           tool; Claude Code denylists have NO mcp__* wildcard). DOCUMENTED to exclude
-#                           MCP; the empty-array case is runtime-unconfirmed (registry caches agent
-#                           defs per session) -> hence the L1 hedge below. Verify next session: dispatch
-#                           decision-critic and confirm it reports zero tools.
+#                           MCP; runtime-confirmed by scripts/probe-claude-code.mjs. The L1 hedge below
+#                           stays for any loader that treats an empty array as unset.
 #   disallowedTools: ... -> L1 hedge. If a loader treats [] as unset, this still strips named core
 #                           evidence/mutation/escape tools (incl. Skill + worktree/session controls that
 #                           otherwise leak). KNOWN-INCOMPLETE: MCP + unenumerated tools still leak at L1.

@@ -11,6 +11,23 @@ so it structurally can't fabricate the evidence it reviews. (The underlying "all
 complete, deny-list leaks" principle is classic default-deny security — see [Prior art](#prior-art--honest-novelty);
 what's less common is naming it as a reviewer-role contract and making it portable.)
 
+## Measured, not claimed
+
+`node scripts/probe-claude-code.mjs` starts the Claude Code CLI with three configs and reads the
+tool list the host actually resolves (from the `init` event, killed before any model call, so it
+spends no tokens). One run, Claude Code 2.1.292, a session with 13 MCP servers:
+
+| Config | Tools | MCP tools | Shell-capable |
+|---|---:|---:|---:|
+| baseline (no agent) | 122 | 91 | 3 |
+| **L1** denylist only (17 core tools named) | 108 | 91 | 2 |
+| **L2** `tools: []` (what the adapter generates) | **0** | **0** | **0** |
+
+The denylist removed every core tool it named and still left 91 MCP tools behind, two of them able
+to run commands. That is the failure this repo exists for. The empty allow-list dropped everything.
+Your numbers will differ with your MCP setup; the L2 row should always be 0, and the script exits 1
+if it isn't.
+
 ---
 
 ## Why this exists
@@ -68,10 +85,10 @@ The portable lesson. "No tools" is only as strong as the host can enforce it:
 > drops MCP. The Claude Code adapter therefore emits `tools: []` (L2) with a `disallowedTools`
 > hedge (L1) beneath it.
 >
-> **Honesty about L2 on Claude Code:** the docs state an allow-list excludes MCP tools; the
-> specific empty-array case (`tools: []`) was not runtime-confirmable at authoring time because
-> the agent registry caches definitions per session. That is *why* the L1 hedge exists. Confirm
-> in a fresh session: dispatch `decision-critic` and check it reports zero tools.
+> **L2 on Claude Code, confirmed:** the docs state an allow-list excludes MCP tools but don't show
+> the empty-array case. `scripts/probe-claude-code.mjs` confirms `tools: []` resolves to zero tools
+> at runtime (table above). The L1 hedge stays in the generated file for any loader or future
+> version that treats an empty array as unset.
 
 ## Layout
 
@@ -87,13 +104,14 @@ examples/
   claude-code/decision-critic.md   # generated output, checked in
 scripts/
   verify.mjs           # spec well-formedness + adapter determinism/conformance self-check
+  probe-claude-code.mjs # runtime check: tools Claude Code actually resolves (baseline / L1 / L2)
 ```
 
 ## Tested adapters
 
 | Adapter | Host | Status | Max level |
 |---|---|---|---|
-| `claude-code.mjs` | Claude Code subagents | **built + `verify.mjs` PASS** | L2 (+L1 hedge) |
+| `claude-code.mjs` | Claude Code subagents | **built, `verify.mjs` PASS, L2 runtime-confirmed by `probe-claude-code.mjs`** | L2 (+L1 hedge) |
 | _OpenAI / LangChain / MCP_ | — | sketch only, **unbuilt + unverified** (see `adapters/README.md`) | TBD |
 
 ## Use it (Claude Code)
@@ -102,6 +120,7 @@ scripts/
 node adapters/claude-code.mjs --out ~/.claude/agents/decision-critic.md
 # then, in Claude Code, route decision/analysis reviews to the `decision-critic` subagent
 npm run verify   # spec + adapter self-check
+npm run probe    # runtime check against your installed claude CLI (no tokens spent)
 ```
 
 Edit the **spec**, never the generated file; re-transpile and `npm run verify`.

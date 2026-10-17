@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build:claude-code": "node adapters/claude-code.mjs --out examples/claude-code/decision-critic.md",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "probe": "node scripts/probe-claude-code.mjs"
   },
   "keywords": [
     "agent",
