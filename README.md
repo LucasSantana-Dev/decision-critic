@@ -8,6 +8,8 @@ The role is written once as a neutral spec and transpiled into each agent host. 
 
 `npm run probe` starts the Claude Code CLI three ways and reads the tool list the host actually resolves. It stops the CLI before the first model call, so it costs no tokens.
 
+![npm run probe: 122 tools, then 108 with a denylist, then 0 with tools: []](docs/probe.gif)
+
 One run on Claude Code 2.1.292, in a session with 13 MCP servers:
 
 | Config | Tools | MCP tools | Exec-style tools* |
