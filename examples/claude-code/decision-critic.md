@@ -5,13 +5,13 @@ model: opus
 # GENERATED from decision-critic spec v0.2.0 by adapters/claude-code.mjs. Edit the spec, re-transpile.
 # Zero evidence-gathering tools BY CONSTRUCTION (tool-policy.json: empty allow-list, preferredLevel L2).
 #   tools: []            -> L2 structural guard. An empty allow-list resolves to zero tools incl. MCP
-#                           and is the ONLY complete boundary (a denylist cannot name every MCP/plugin
-#                           tool; Claude Code denylists have NO mcp__* wildcard). DOCUMENTED to exclude
-#                           MCP; runtime-confirmed by scripts/probe-claude-code.mjs. The L1 hedge below
+#                           and is the ONLY complete boundary (a denylist only removes what it names, so
+#                           core tools you did not name still leak, even with mcp__*). DOCUMENTED to
+#                           exclude MCP; runtime-confirmed by scripts/probe-claude-code.mjs. The L1 hedge below
 #                           stays for any loader that treats an empty array as unset.
 #   disallowedTools: ... -> L1 hedge. If a loader treats [] as unset, this still strips named core
 #                           evidence/mutation/escape tools (incl. Skill + worktree/session controls that
-#                           otherwise leak). KNOWN-INCOMPLETE: MCP + unenumerated tools still leak at L1.
+#                           otherwise leak). KNOWN-INCOMPLETE: this list does not name MCP, and unnamed core tools still leak at L1.
 tools: []
 disallowedTools: Read, Grep, Glob, Write, Edit, NotebookEdit, Bash, WebFetch, WebSearch, Task, Agent, Skill, EnterWorktree, ExitWorktree, Monitor, TaskStop, ToolSearch
 ---

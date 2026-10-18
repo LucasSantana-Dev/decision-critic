@@ -10,6 +10,8 @@
  *   L1         disallowedTools only, inline --agents          -> what a denylist leaves behind
  *   L2 inline  tools: [] + disallowedTools, inline --agents   -> must be 0
  *   L2 file    the generated .md, loaded from .claude/agents  -> must be 0
+ *   L1 + mcp   the L1 denylist plus `mcp__*`, inline --agents -> MCP gone, unnamed core tools stay
+ *   mcp only   disallowedTools: ['mcp__*'], inline --agents   -> MCP gone, nearly all core tools stay
  *
  * "L2 file" copies examples/claude-code/decision-critic.md into a temp project's .claude/agents/
  * (renamed so it cannot collide with an installed decision-critic) and selects it with --agent,
@@ -20,7 +22,8 @@
  *
  * Prints counts only (your MCP tool names stay private). --names lists the tools L1 leaks.
  * --no-mcp runs every config with an empty, strict MCP config (zero MCP servers).
- * Exit 1 if either L2 row resolves to more than zero tools.
+ * Exit 1 if either L2 row (rows 2 and 3) resolves to more than zero tools. The two `mcp__*`
+ * rows are informational and never affect the exit code.
  *
  *   node scripts/probe-claude-code.mjs [--names] [--no-mcp]
  */
@@ -53,6 +56,8 @@ writeFileSync(join(project, '.claude', 'agents', `${FILE_AGENT}.md`), generated.
 const agents = {
   'dc-probe-l1': { description: 'L1 probe', prompt: 'Reply ok.', disallowedTools: deny },
   'dc-probe-l2': { description: 'L2 probe', prompt: 'Reply ok.', tools: [], disallowedTools: deny },
+  'dc-probe-l1-mcp': { description: 'L1 + mcp probe', prompt: 'Reply ok.', disallowedTools: [...deny, 'mcp__*'] },
+  'dc-probe-mcp-only': { description: 'mcp only probe', prompt: 'Reply ok.', disallowedTools: ['mcp__*'] },
 };
 
 function resolveTools(mode) {
@@ -108,6 +113,8 @@ try {
     ['L1 denylist only', 'dc-probe-l1'],
     ['L2 tools: [] (inline)', 'dc-probe-l2'],
     ['L2 tools: [] (.md file)', 'file'],
+    ['L1 deny + mcp__*', 'dc-probe-l1-mcp'],
+    ['deny mcp__* only', 'dc-probe-mcp-only'],
   ]) {
     const row = { label, ...summarize(await resolveTools(mode)) };
     if (mode === 'file' && pinnedModel && pinnedModel !== 'inherit' && !row.model.includes(pinnedModel)) {
@@ -135,7 +142,8 @@ if (pinnedModel && pinnedModel !== 'inherit') console.log(`\n  .md file loaded: 
 const l1 = rows[1];
 if (SHOW_NAMES && l1.shell.length) console.log(`\n  shell-capable tools left by L1: ${l1.shell.join(', ')}`);
 
-const failed = rows.slice(2).filter((r) => r.total !== 0);
+const L2_ROWS = [rows[2], rows[3]];
+const failed = L2_ROWS.filter((r) => r.total !== 0);
 console.log(failed.length === 0
   ? '\nPROBE: PASS (both L2 rows resolve to zero tools)'
   : `\nPROBE: FAIL (${failed.map((r) => `${r.label}: ${r.total} tools`).join('; ')})`);

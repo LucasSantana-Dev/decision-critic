@@ -49,7 +49,7 @@ const fm = a.slice(0, a.indexOf('\n---', 4) + 4);
 const denyLine = (fm.match(/^disallowedTools:\s*(.+)$/m) || [])[1] || '';
 const denyset = new Set(denyLine.split(',').map((s) => s.trim()).filter(Boolean));
 
-// every nameable deny-category (all but 'mcp', which has no full denylist token) maps to >=1 tool
+// every nameable deny-category (all but 'mcp', which is covered by L2 and the ToolSearch deny, not by an `mcp__*` token) maps to >=1 tool
 const classes = Array.isArray(policy.denyCategories) ? policy.denyCategories : (policy.denyCategories?.classes ?? []);
 const nameable = classes.filter((c) => c !== 'mcp');
 // the adapter owns the map; re-derive expected coverage by importing nothing; assert the denylist
