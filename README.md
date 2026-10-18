@@ -18,14 +18,16 @@ Claude Code 2.1.292, two runs: one with 7 MCP servers connected (13 configured),
 | L1: denylist of 17 core tools, inline | 108 | 91 | 2 | 14 |
 | L2: `tools: []`, inline | **0** | **0** | **0** | **0** |
 | L2: the generated `.md`, loaded from `.claude/agents/` | **0** | **0** | **0** | **0** |
+| L1 denylist plus `mcp__*`, inline | 17 | 0 | 0 | 14 |
+| `disallowedTools: ['mcp__*']` only, inline | 31 | 0 | 1 | 28 |
 
 \* Matched by name (`bash`, `shell`, `exec`, `process`, `terminal`, `command`).
 
-The denylist removed the 14 named tools that exist in this version (`Grep`, `Glob` and `Agent` are not separate tools here). It left all 91 MCP tools in place, including one that runs arbitrary shell commands. Even with no MCP servers it left 14 core tools, such as `Workflow`, `SendMessage` and `RemoteTrigger`. The empty allow-list removed everything.
+The denylist removed the 14 named tools that exist in this version (`Grep`, `Glob` and `Agent` are not separate tools here). On its own it left all 91 MCP tools in place, including one that runs arbitrary shell commands. Adding `mcp__*` removes them all: Claude Code accepts that wildcard in `disallowedTools` (fixed for subagents in v2.1.178). What a denylist still can't do is remove tools nobody named. With the wildcard the L1 config still resolves 17 tools, and with no MCP servers it leaves 14 core tools, such as `Workflow`, `SendMessage` and `RemoteTrigger`. Only the empty allow-list gives zero. The generated agent does not use `mcp__*`, because `tools: []` already covers MCP.
 
-The last row copies the generated file into a temp project and selects it with `--agent`, so Claude Code's own loader parses the frontmatter. The init event has no agent field, so the probe confirms the file was applied through the model it pins (`opus`). With `--agent` the reviewer runs as the main-thread agent. The init event does not list a Task subagent's tools, so that path is not measured.
+The `.md` row copies the generated file into a temp project and selects it with `--agent`, so Claude Code's own loader parses the frontmatter. The init event has no agent field, so the probe confirms the file was applied through the model it pins (`opus`). With `--agent` the reviewer runs as the main-thread agent. The init event does not list a Task subagent's tools, so that path is not measured.
 
-Your numbers depend on your setup. Both L2 rows should always be 0, and the script exits 1 if either isn't.
+Your numbers depend on your setup. Both L2 rows should always be 0, and the script exits 1 if either isn't. The two `mcp__*` rows are informational.
 
 ## Why
 
@@ -45,7 +47,7 @@ What this does and doesn't cover:
 | Level | Mechanism | What it guarantees | What leaks |
 |---|---|---|---|
 | L0 | Prompt only | Nothing structural | Everything the caller grants |
-| L1 | Per-agent denylist | Named tools are gone | Anything you can't name: MCP tools (no `mcp__*` wildcard), new tools, plugins |
+| L1 | Per-agent denylist | Named tools are gone | Anything you don't name: core tools, new tools added later (`mcp__*` can cover MCP tools) |
 | L2 | Per-agent empty allow-list | Zero tools, core and MCP | Nothing |
 
 The Claude Code adapter emits `tools: []` (L2) and keeps a `disallowedTools` list (L1) underneath, in case some loader or future version treats an empty array as unset.
