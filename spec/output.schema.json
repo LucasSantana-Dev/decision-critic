@@ -14,7 +14,7 @@
     },
     "verdictIsConditional": {
       "type": "boolean",
-      "description": "True if the verdict depends on facts the critic could not confirm (claimsToVerify non-empty and blocking). A conditional verdict is a hypothesis until the orchestrator verifies those claims — even when 'verdict' is SOUND."
+      "description": "True if the verdict depends on facts the critic could not confirm (claimsToVerify non-empty and blocking). A conditional verdict is a hypothesis until the orchestrator verifies those claims, even when 'verdict' is SOUND."
     },
     "oneLineAssessment": { "type": "string", "minLength": 1 },
     "strongestObjection": {
@@ -80,7 +80,7 @@
       "additionalProperties": false,
       "required": ["option", "why"],
       "properties": {
-        "option": { "type": "string", "description": "An option from the stated decision space only — never invented." },
+        "option": { "type": "string", "description": "An option from the stated decision space only, never invented." },
         "why": { "type": "string" }
       }
     },

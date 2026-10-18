@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Repo self-check: the spec is well-formed and the Claude Code adapter is deterministic
- * and policy-conformant. No external/private dependencies — runs anywhere.
+ * and policy-conformant. No external/private dependencies; runs anywhere.
  */
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -41,7 +41,7 @@ const b = execFileSync('node', [join(ROOT, 'adapters/claude-code.mjs')], { encod
 // committed example matches a fresh transpile (regenerate-in-place is a no-op)
 const example = readFileSync(join(ROOT, 'examples/claude-code/decision-critic.md'), 'utf8');
 (a === example) ? ok('examples/claude-code/decision-critic.md is up to date')
-                : bad('example is STALE — run npm run build:claude-code');
+                : bad('example is STALE: run npm run build:claude-code');
 
 // generated frontmatter enforces the policy (L2 guard + L1 hedge)
 const fm = a.slice(0, a.indexOf('\n---', 4) + 4);
@@ -52,7 +52,7 @@ const denyset = new Set(denyLine.split(',').map((s) => s.trim()).filter(Boolean)
 // every nameable deny-category (all but 'mcp', which has no full denylist token) maps to >=1 tool
 const classes = Array.isArray(policy.denyCategories) ? policy.denyCategories : (policy.denyCategories?.classes ?? []);
 const nameable = classes.filter((c) => c !== 'mcp');
-// the adapter owns the map; re-derive expected coverage by importing nothing — assert the denylist
+// the adapter owns the map; re-derive expected coverage by importing nothing; assert the denylist
 // is non-trivial AND covers the high-value escape vectors the threat review flagged.
 const mustDeny = ['Bash', 'Read', 'Write', 'Edit', 'Skill', 'EnterWorktree', 'ExitWorktree'];
 const missing = mustDeny.filter((t) => !denyset.has(t));
