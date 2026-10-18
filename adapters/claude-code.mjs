@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * decision-critic — Claude Code adapter (reference implementation).
+ * decision-critic: Claude Code adapter (reference implementation).
  *
  * Transpiles the neutral spec (../spec/*) into a Claude Code subagent file
  * (`agents/decision-critic.md`: YAML frontmatter + system-prompt body).
@@ -14,11 +14,11 @@
  * Claude Code supports L2 (per-agent allow-list) AND L1 (denylist), so this
  * emits BOTH:
  *   - `tools: []`        L2 structural guard. An allow-list excludes inherited
- *                        tools it never names, including MCP — the ONLY complete
+ *                        tools it never names, including MCP; the ONLY complete
  *                        boundary. (Documented to exclude MCP; the empty-array
  *                        edge case could not be runtime-verified at authoring
  *                        time because the agent registry caches definitions per
- *                        session — see the generated file's header note.)
+ *                        session; see the generated file's header note.)
  *   - `disallowedTools`  L1 hedge. If a loader ever treats `[]` as "unset ->
  *                        inherit all", this still strips the named core
  *                        evidence/mutation/escape tools. KNOWN-INCOMPLETE: a
@@ -39,7 +39,7 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SPEC = join(HERE, '..', 'spec');
 
-// Overridable. Not portable knowledge — a Claude-Code-specific default; pass --model to change.
+// Overridable. Not portable knowledge: a Claude-Code-specific default; pass --model to change.
 const DEFAULT_MODEL = 'opus';
 
 // Host-specific knowledge lives in the adapter: map neutral deny-categories to
@@ -52,7 +52,7 @@ const CLAUDE_CODE_TOOLS_BY_CATEGORY = {
   'network':          ['WebFetch', 'WebSearch'],
   'subagent-spawn':   ['Task', 'Agent'],
   // A skill can internally invoke a composite that spawns tool-equipped agents,
-  // re-granting evidence-gathering by the back door — deny it under L1.
+  // re-granting evidence-gathering by the back door, so deny it under L1.
   'skill-invoke':     ['Skill'],
   // Session/worktree controls are NOT in the "core" set and silently leak under a
   // bare denylist (observed). The critic needs none of them.
@@ -61,7 +61,7 @@ const CLAUDE_CODE_TOOLS_BY_CATEGORY = {
   // `disallowedTools: mcp__*`. Individual MCP tools CAN be named, but enumerating
   // them all is impractical and breaks as servers register dynamically. So MCP is
   // covered ONLY by the L2 empty allow-list. ToolSearch (which LOADS deferred/MCP
-  // tool schemas) is denied to block discovery — best-effort, not a substitute for L2.
+  // tool schemas) is denied to block discovery. Best-effort, not a substitute for L2.
   'mcp':              ['ToolSearch'],
 };
 
@@ -107,7 +107,7 @@ function buildAgentFile(model) {
 
   const description =
     'Artifact-only adversarial reviewer for DECISIONS and analysis. Reasons solely on ' +
-    'the provided ARTIFACT + CONTRACT — has NO evidence-gathering tools by construction, so it ' +
+    'the provided ARTIFACT + CONTRACT and has NO evidence-gathering tools by construction, so it ' +
     'cannot fabricate facts from logs/evals it ran itself. Use before committing a decision; ' +
     'use a tool-equipped reviewer for code reviews that need to verify the codebase.';
 
@@ -116,7 +116,7 @@ function buildAgentFile(model) {
     'name: decision-critic',
     `description: ${description}`,
     `model: ${model}`,
-    `# GENERATED from decision-critic spec v${policy.version} by adapters/claude-code.mjs — edit the spec, re-transpile.`,
+    `# GENERATED from decision-critic spec v${policy.version} by adapters/claude-code.mjs. Edit the spec, re-transpile.`,
     '# Zero evidence-gathering tools BY CONSTRUCTION (tool-policy.json: empty allow-list, preferredLevel L2).',
     '#   tools: []            -> L2 structural guard. An empty allow-list resolves to zero tools incl. MCP',
     '#                           and is the ONLY complete boundary (a denylist cannot name every MCP/plugin',

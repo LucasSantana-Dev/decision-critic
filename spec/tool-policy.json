@@ -5,10 +5,10 @@
   "toolAccess": {
     "mode": "allowlist",
     "allow": [],
-    "rationale": "An artifact-only critic that can read files, run shells/evals, or call MCP tools can — and historically did — gather evidence, misread it, and assert a fabricated fact as a finding. An empty allow-list makes EXTERNAL evidence-gathering, and therefore that specific misattribution failure, STRUCTURALLY impossible rather than merely discouraged by prose. It does NOT prevent inline hallucination (stating a false fact without a tool call); the prompt's Hard Constraints and the claimsToVerify handoff guard that, behaviorally."
+    "rationale": "An artifact-only critic that can read files, run shells/evals, or call MCP tools can (and historically did) gather evidence, misread it, and assert a fabricated fact as a finding. An empty allow-list makes EXTERNAL evidence-gathering, and therefore that specific misattribution failure, STRUCTURALLY impossible rather than merely discouraged by prose. It does NOT prevent inline hallucination (stating a false fact without a tool call); the prompt's Hard Constraints and the claimsToVerify handoff guard that, behaviorally."
   },
   "denyCategories": {
-    "_note": "A VOCABULARY of capability classes a host MAY expose, mapped to concrete tool names by each adapter. Categories that a given host does not have (e.g. 'subagent-spawn' on a host with no subagent API) DO NOT APPLY — an adapter MUST skip them; their absence from a generated artifact is not a conformance violation. Only meaningful at L1 (denylist hosts) and as the L1 hedge beneath L2.",
+    "_note": "A VOCABULARY of capability classes a host MAY expose, mapped to concrete tool names by each adapter. Categories that a given host does not have (e.g. 'subagent-spawn' on a host with no subagent API) DO NOT APPLY: an adapter MUST skip them; their absence from a generated artifact is not a conformance violation. Only meaningful at L1 (denylist hosts) and as the L1 hedge beneath L2.",
     "classes": [
       "filesystem-read",
       "filesystem-write",
@@ -27,17 +27,17 @@
     "levels": {
       "L0": {
         "name": "prompt-only",
-        "guarantee": "Behavioral only — NO structural enforcement. The 'you have no tools' contract lives only in the prompt; if the host grants tools, the model may still call them. A capable model with a clear prompt often complies, but nothing forces it.",
+        "guarantee": "Behavioral only. NO structural enforcement. The 'you have no tools' contract lives only in the prompt; if the host grants tools, the model may still call them. A capable model with a clear prompt often complies, but nothing forces it.",
         "useWhen": "The host cannot restrict tools per-agent at all (e.g. a generic chat API where the caller controls tools)."
       },
       "L1": {
         "name": "denylist",
-        "guarantee": "Named evidence/mutation tools are removed. Blocks the PRIMARY fabrication path (read-a-log, run-an-eval, write-a-file). KNOWN-INCOMPLETE BY DESIGN: a denylist can only remove tools it can NAME, so anything it cannot enumerate leaks — dynamically-registered MCP/plugin tools (no wildcard on many hosts), newly-added core tools, or skills that internally spawn tool-equipped agents. L1 is a best-effort hedge, never a complete boundary.",
+        "guarantee": "Named evidence/mutation tools are removed. Blocks the PRIMARY fabrication path (read-a-log, run-an-eval, write-a-file). KNOWN-INCOMPLETE BY DESIGN: a denylist can only remove tools it can NAME, so anything it cannot enumerate leaks: dynamically-registered MCP/plugin tools (no wildcard on many hosts), newly-added core tools, or skills that internally spawn tool-equipped agents. L1 is a best-effort hedge, never a complete boundary.",
         "useWhen": "The host supports a per-agent denylist but not an allow-list, or as a belt-and-suspenders fallback beneath L2."
       },
       "L2": {
         "name": "empty-allowlist",
-        "guarantee": "The agent resolves to ZERO tools — core and MCP. External evidence-gathering is structurally impossible. This is the target level and the ONLY complete boundary, because an allow-list (unlike a denylist) excludes inherited tools it never names, including MCP.",
+        "guarantee": "The agent resolves to ZERO tools, core and MCP. External evidence-gathering is structurally impossible. This is the target level and the ONLY complete boundary, because an allow-list (unlike a denylist) excludes inherited tools it never names, including MCP.",
         "useWhen": "The host supports a per-agent allow-list that excludes inherited tools (incl. MCP/plugin tools)."
       }
     }
