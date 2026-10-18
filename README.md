@@ -6,21 +6,26 @@ The role is written once as a neutral spec and transpiled into each agent host. 
 
 ## Measured
 
-`npm run probe` starts the Claude Code CLI three ways and reads the tool list the host actually resolves. It stops the CLI before the first model call, so it costs no tokens.
+`npm run probe` starts the Claude Code CLI once per config and reads the tool list the host actually resolves. It stops the CLI before the first model call, so it costs no tokens.
 
 ![npm run probe: 122 tools, then 108 with a denylist, then 0 with tools: []](docs/probe.gif)
 
-One run on Claude Code 2.1.292, in a session with 13 MCP servers:
+Claude Code 2.1.292, two runs: one with 7 MCP servers connected (13 configured), one with `--no-mcp`:
 
-| Config | Tools | MCP tools | Exec-style tools* |
-|---|---:|---:|---:|
-| No agent | 122 | 91 | 3 |
-| L1: denylist of 17 core tools | 108 | 91 | 2 |
-| L2: `tools: []` (what the adapter generates) | **0** | **0** | **0** |
+| Config | Tools (7 MCP servers) | MCP tools | Exec-style* | Tools (no MCP) |
+|---|---:|---:|---:|---:|
+| No agent | 122 | 91 | 3 | 28 |
+| L1: denylist of 17 core tools, inline | 108 | 91 | 2 | 14 |
+| L2: `tools: []`, inline | **0** | **0** | **0** | **0** |
+| L2: the generated `.md`, loaded from `.claude/agents/` | **0** | **0** | **0** | **0** |
 
 \* Matched by name (`bash`, `shell`, `exec`, `process`, `terminal`, `command`).
 
-The denylist removed every tool it named and left all 91 MCP tools in place, including one that runs arbitrary shell commands. The empty allow-list removed everything. Your numbers depend on your MCP setup. The L2 row should always be 0, and the script exits 1 if it isn't.
+The denylist removed the 14 named tools that exist in this version (`Grep`, `Glob` and `Agent` are not separate tools here). It left all 91 MCP tools in place, including one that runs arbitrary shell commands. Even with no MCP servers it left 14 core tools, such as `Workflow`, `SendMessage` and `RemoteTrigger`. The empty allow-list removed everything.
+
+The last row copies the generated file into a temp project and selects it with `--agent`, so Claude Code's own loader parses the frontmatter. The init event has no agent field, so the probe confirms the file was applied through the model it pins (`opus`). With `--agent` the reviewer runs as the main-thread agent. The init event does not list a Task subagent's tools, so that path is not measured.
+
+Your numbers depend on your setup. Both L2 rows should always be 0, and the script exits 1 if either isn't.
 
 ## Why
 
