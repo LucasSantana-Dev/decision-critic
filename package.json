@@ -1,7 +1,7 @@
 {
   "name": "decision-critic",
   "version": "0.2.0",
-  "description": "A portable, tool-less adversarial decision reviewer — defined once as a neutral spec, transpiled into any agent host. Makes evidence fabrication structurally impossible instead of merely discouraged.",
+  "description": "A reviewer agent with no tools, defined once as a neutral spec and generated for each agent host, so it cannot collect evidence by running things and misreading the output.",
   "license": "MIT",
   "author": "Lucas Santana",
   "type": "module",

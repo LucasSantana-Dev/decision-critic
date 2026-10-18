@@ -85,6 +85,10 @@ Default-deny (allow-lists are complete, denylists leak) is an old security princ
 - A second adapter to show the spec generalizes. OpenAI's Responses API is the likely one, since tools are passed per request and sending none gives L2 directly.
 - `spec/input.schema.json` to mark the artifact as untrusted input.
 
+## Author
+
+I'm Lucas Santana, a senior engineer in Brazil (UTC-3) building AI agent tooling and eval gates on Node/TS backends. I'm open to remote Senior+ roles: [LinkedIn](https://www.linkedin.com/in/devlucassantana).
+
 ## License
 
 MIT © 2026 Lucas Santana
